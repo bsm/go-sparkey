@@ -5,7 +5,7 @@
 
 ### Usage
 
-See examples in [_examples/](_examples/).
+Please see our [examples](_examples/).
 
 ### Documentation
 
