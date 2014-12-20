@@ -103,33 +103,45 @@ func (i *LogIter) ValueLen() uint64 {
 // Key returns the full key at the current position.
 // This method will return a result only once per iteration.
 func (i *LogIter) Key() ([]byte, error) {
-	return i.KeyChunk(maxInt)
+	return i.KeyChunk(-1)
 }
 
 // KeyChunk returns a chunk of the key at the current position.
 func (i *LogIter) KeyChunk(maxlen int) ([]byte, error) {
-	var cLen C.uint64_t
-	var cPtr *C.uint8_t
+	var max, size C.uint64_t
+	var ptr *C.uint8_t
 
-	rc := C.sparkey_logiter_keychunk(i.iter, i.log, C.uint64_t(maxlen), &cPtr, &cLen)
+	if maxlen < 0 {
+		max = C.sparkey_logiter_keylen(i.iter)
+	} else {
+		max = C.uint64_t(maxlen)
+	}
+
+	rc := C.sparkey_logiter_keychunk(i.iter, i.log, max, &ptr, &size)
 	if rc != rc_SUCCESS {
 		return nil, Error(rc)
 	}
-	return C.GoBytes(unsafe.Pointer(cPtr), C.int(cLen)), nil
+	return C.GoBytes(unsafe.Pointer(ptr), C.int(size)), nil
 }
 
 // Value returns the full values at the current position.
 // This method will return a result only once per iteration.
 func (i *LogIter) Value() ([]byte, error) {
-	return i.ValueChunk(maxInt)
+	return i.ValueChunk(-1)
 }
 
 // ValueChunk returns a chunk of the value at the current position.
 func (i *LogIter) ValueChunk(maxlen int) ([]byte, error) {
-	var size C.uint64_t
+	var size, max C.uint64_t
 	var ptr *C.uint8_t
 
-	rc := C.sparkey_logiter_valuechunk(i.iter, i.log, C.uint64_t(maxlen), &ptr, &size)
+	if maxlen < 0 {
+		max = C.sparkey_logiter_valuelen(i.iter)
+	} else {
+		max = C.uint64_t(maxlen)
+	}
+
+	rc := C.sparkey_logiter_valuechunk(i.iter, i.log, max, &ptr, &size)
 	if rc != rc_SUCCESS {
 		return nil, Error(rc)
 	}

@@ -214,9 +214,11 @@ var _ = Describe("HashIter", func() {
 		err = subject.Seek([]byte("zk"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
+		Expect(kv()).To(Equal(":last"))
 		err = subject.Seek([]byte("xk"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
+		Expect(kv()).To(Equal(":short"))
 	})
 
 	It("should retrieve values", func() {
