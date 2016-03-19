@@ -6,7 +6,13 @@ import "C"
 import (
 	"io"
 	"io/ioutil"
+	"unsafe"
 )
+
+type Reader interface {
+	io.Reader
+	io.WriterTo
+}
 
 /* Log iterator */
 
@@ -108,9 +114,9 @@ func (i *LogIter) Key() ([]byte, error) {
 	return ioutil.ReadAll(i.KeyReader())
 }
 
-// KeyReader returns an io.Reader for the key. The reader is no longer valid
-// once the iterator has proceeded.
-func (i *LogIter) KeyReader() io.Reader {
+// KeyReader returns an io.Reader for the key. The reader also implements
+// io.WriterTo. The reader is no longer valid once the iterator has proceeded.
+func (i *LogIter) KeyReader() Reader {
 	return &keyReader{i}
 }
 
@@ -120,9 +126,9 @@ func (i *LogIter) Value() ([]byte, error) {
 	return ioutil.ReadAll(i.ValueReader())
 }
 
-// ValueReader returns an io.Reader for the value. The reader is no longer
-// valid once the iterator has proceeded.
-func (i *LogIter) ValueReader() io.Reader {
+// ValueReader returns an io.Reader for the value. The reader also implements
+// io.WriterTo. The reader is no longer valid once the iterator has proceeded.
+func (i *LogIter) ValueReader() Reader {
 	return &valueReader{i}
 }
 
@@ -207,6 +213,36 @@ func (k *keyReader) Read(b []byte) (int, error) {
 	return int(size), err
 }
 
+func (k *keyReader) WriteTo(w io.Writer) (int64, error) {
+	if k.State() != ITERATOR_ACTIVE {
+		return 0, ERROR_LOG_ITERATOR_INACTIVE
+	}
+
+	var size C.uint64_t
+	var ptr *C.uint8_t
+
+	remaining := k.KeyLen()
+	var written int64
+	for remaining > 0 {
+		rc := C.sparkey_logiter_keychunk(k.iter, k.log, C.uint64_t(remaining), &ptr, &size)
+		if rc != rc_SUCCESS {
+			return written, Error(rc)
+		} else if size == 0 {
+			return written, nil
+		}
+
+		buf := C.GoBytes(unsafe.Pointer(ptr), C.int(size))
+		n, err := w.Write(buf)
+		written += int64(n)
+		remaining -= uint64(n)
+		if err != nil {
+			return written, err
+		}
+	}
+
+	return written, nil
+}
+
 type valueReader struct {
 	*LogIter
 }
@@ -231,4 +267,34 @@ func (v *valueReader) Read(b []byte) (int, error) {
 	}
 
 	return int(size), err
+}
+
+func (v *valueReader) WriteTo(w io.Writer) (int64, error) {
+	if v.State() != ITERATOR_ACTIVE {
+		return 0, ERROR_LOG_ITERATOR_INACTIVE
+	}
+
+	var size C.uint64_t
+	var ptr *C.uint8_t
+
+	remaining := v.ValueLen()
+	var written int64
+	for remaining > 0 {
+		rc := C.sparkey_logiter_valuechunk(v.iter, v.log, C.uint64_t(remaining), &ptr, &size)
+		if rc != rc_SUCCESS {
+			return written, Error(rc)
+		} else if size == 0 {
+			return written, nil
+		}
+
+		buf := C.GoBytes(unsafe.Pointer(ptr), C.int(size))
+		n, err := w.Write(buf)
+		written += int64(n)
+		remaining -= uint64(n)
+		if err != nil {
+			return written, err
+		}
+	}
+
+	return written, nil
 }
