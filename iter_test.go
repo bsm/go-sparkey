@@ -43,6 +43,8 @@ var _ = Describe("LogIter", func() {
 		_, err := subject.Key()
 		Expect(err).To(Equal(ERROR_LOG_ITERATOR_INACTIVE))
 		Expect(subject.Next()).NotTo(HaveOccurred())
+		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
+		Expect(subject.Valid()).To(Equal(true))
 
 		key, err := subject.Key()
 		Expect(err).NotTo(HaveOccurred())
@@ -54,19 +56,26 @@ var _ = Describe("LogIter", func() {
 
 		Expect(subject.Next()).NotTo(HaveOccurred())
 
-		key, err = subject.KeyChunk(0)
+		b := []byte{}
+		r := subject.KeyReader()
+		n, err := r.Read(b)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(key)).To(Equal(""))
+		Expect(n).To(Equal(0))
+		Expect(string(b)).To(Equal(""))
 
-		key, err = subject.KeyChunk(5)
+		b = make([]byte, 5)
+		n, err = r.Read(b)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(key)).To(Equal("yk"))
+		Expect(n).To(Equal(2))
+		Expect(string(b[:2])).To(Equal("yk"))
 	})
 
 	It("should retrieve values", func() {
 		_, err := subject.Value()
 		Expect(err).To(Equal(ERROR_LOG_ITERATOR_INACTIVE))
 		Expect(subject.Next()).NotTo(HaveOccurred())
+		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
+		Expect(subject.Valid()).To(Equal(true))
 
 		val, err := subject.Value()
 		Expect(err).NotTo(HaveOccurred())
@@ -78,13 +87,20 @@ var _ = Describe("LogIter", func() {
 
 		Expect(subject.Next()).NotTo(HaveOccurred())
 
-		val, err = subject.ValueChunk(0)
+		b := []byte{}
+		r := subject.ValueReader()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(val)).To(Equal(""))
 
-		val, err = subject.ValueChunk(5)
+		n, err := r.Read(b)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(val)).To(Equal("longv"))
+		Expect(n).To(Equal(0))
+		Expect(string(b)).To(Equal(""))
+
+		b = make([]byte, 5)
+		n, err = r.Read(b)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(n).To(Equal(5))
+		Expect(string(b)).To(Equal("longv"))
 
 		val, err = subject.Value()
 		Expect(err).NotTo(HaveOccurred())
@@ -137,7 +153,7 @@ var _ = Describe("LogIter", func() {
 			contents = append(contents, kv())
 		}
 		Expect(contents).To(Equal([]string{
-			"xk:short", "yk:longvalue", "zk:last", "yk:",
+			"xk:short", "yk:longvalue", "zk:" + veryLongString, "yk:",
 		}))
 		Expect(subject.Err()).NotTo(HaveOccurred())
 	})
@@ -167,7 +183,6 @@ var _ = Describe("LogIter", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(val).To(Equal(1))
 	})
-
 })
 
 var _ = Describe("HashIter", func() {
@@ -199,7 +214,7 @@ var _ = Describe("HashIter", func() {
 			contents = append(contents, kv())
 		}
 		Expect(contents).To(Equal([]string{
-			"xk:short", "zk:last",
+			"xk:short", "zk:" + veryLongString,
 		}))
 		Expect(subject.Err()).NotTo(HaveOccurred())
 	})
@@ -214,7 +229,7 @@ var _ = Describe("HashIter", func() {
 		err = subject.Seek([]byte("zk"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
-		Expect(kv()).To(Equal(":last"))
+		Expect(kv()).To(Equal(":" + veryLongString))
 		err = subject.Seek([]byte("xk"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
@@ -235,7 +250,7 @@ var _ = Describe("HashIter", func() {
 		// Get existing
 		val, err = subject.Get([]byte("zk"))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(val)).To(Equal("last"))
+		Expect(string(val)).To(Equal(veryLongString))
 
 		val, err = subject.Get([]byte("xk"))
 		Expect(err).NotTo(HaveOccurred())

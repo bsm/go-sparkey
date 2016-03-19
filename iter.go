@@ -1,10 +1,12 @@
 package sparkey
 
-//#cgo LDFLAGS: -lsparkey
 //#include <stdlib.h>
 //#include <sparkey/sparkey.h>
 import "C"
-import "unsafe"
+import (
+	"io"
+	"io/ioutil"
+)
 
 /* Log iterator */
 
@@ -17,8 +19,8 @@ import "unsafe"
 //     reader, _  := OpenLogReader("test.spl")
 //     iter, _ := reader.Iterator()
 //     for iter.Next(); iter.Valid(); iter.Next() {
-//	       key, _ := iter.Key()
-//	       val, _ := iter.Value()
+//         key, _ := iter.Key()
+//         val, _ := iter.Value()
 //         fmt.Println("K/V", key, value)
 //     }
 //     if err := iter.Err(); err != nil {
@@ -103,49 +105,25 @@ func (i *LogIter) ValueLen() uint64 {
 // Key returns the full key at the current position.
 // This method will return a result only once per iteration.
 func (i *LogIter) Key() ([]byte, error) {
-	return i.KeyChunk(-1)
+	return ioutil.ReadAll(i.KeyReader())
 }
 
-// KeyChunk returns a chunk of the key at the current position.
-func (i *LogIter) KeyChunk(maxlen int) ([]byte, error) {
-	var max, size C.uint64_t
-	var ptr *C.uint8_t
-
-	if maxlen < 0 {
-		max = C.sparkey_logiter_keylen(i.iter)
-	} else {
-		max = C.uint64_t(maxlen)
-	}
-
-	rc := C.sparkey_logiter_keychunk(i.iter, i.log, max, &ptr, &size)
-	if rc != rc_SUCCESS {
-		return nil, Error(rc)
-	}
-	return C.GoBytes(unsafe.Pointer(ptr), C.int(size)), nil
+// KeyReader returns an io.Reader for the key. The reader is no longer valid
+// once the iterator has proceeded.
+func (i *LogIter) KeyReader() io.Reader {
+	return &keyReader{i}
 }
 
 // Value returns the full values at the current position.
 // This method will return a result only once per iteration.
 func (i *LogIter) Value() ([]byte, error) {
-	return i.ValueChunk(-1)
+	return ioutil.ReadAll(i.ValueReader())
 }
 
-// ValueChunk returns a chunk of the value at the current position.
-func (i *LogIter) ValueChunk(maxlen int) ([]byte, error) {
-	var size, max C.uint64_t
-	var ptr *C.uint8_t
-
-	if maxlen < 0 {
-		max = C.sparkey_logiter_valuelen(i.iter)
-	} else {
-		max = C.uint64_t(maxlen)
-	}
-
-	rc := C.sparkey_logiter_valuechunk(i.iter, i.log, max, &ptr, &size)
-	if rc != rc_SUCCESS {
-		return nil, Error(rc)
-	}
-	return C.GoBytes(unsafe.Pointer(ptr), C.int(size)), nil
+// ValueReader returns an io.Reader for the value. The reader is no longer
+// valid once the iterator has proceeded.
+func (i *LogIter) ValueReader() io.Reader {
+	return &valueReader{i}
 }
 
 // Compare compares the keys of two iterators pointing to the same log.
@@ -200,4 +178,57 @@ func (i *HashIter) NextLive() error {
 		i.err = Error(rc)
 	}
 	return errorOrNil(rc)
+}
+
+/* Key/value reader */
+
+type keyReader struct {
+	*LogIter
+}
+
+func (k *keyReader) Read(b []byte) (int, error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	var max, size C.uint64_t
+	var ptr *C.uint8_t
+	var err error
+
+	max = C.uint64_t(len(b))
+	ptr = (*C.uint8_t)(&b[0])
+	rc := C.sparkey_logiter_fill_key(k.iter, k.log, max, ptr, &size)
+	if rc != rc_SUCCESS {
+		err = Error(rc)
+	} else if size == 0 {
+		err = io.EOF
+	}
+
+	return int(size), err
+}
+
+type valueReader struct {
+	*LogIter
+}
+
+func (v *valueReader) Read(b []byte) (int, error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	var max, size C.uint64_t
+	var ptr *C.uint8_t
+	var err error
+
+	max = C.uint64_t(len(b))
+	ptr = (*C.uint8_t)(&b[0])
+
+	rc := C.sparkey_logiter_fill_value(v.iter, v.log, max, ptr, &size)
+	if rc != rc_SUCCESS {
+		err = Error(rc)
+	} else if size == 0 {
+		err = io.EOF
+	}
+
+	return int(size), err
 }

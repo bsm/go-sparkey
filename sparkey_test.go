@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -145,6 +146,8 @@ func writeTestLog(fname string, cb func(w *LogWriter) error) error {
 	return cb(w)
 }
 
+var veryLongString = strings.Repeat("blah", 2000)
+
 func writeDefaultTestHash() (string, error) {
 	return writeTestHash(testDir, func(w *LogWriter) (err error) {
 		if err = w.Put([]byte("xk"), []byte("short")); err != nil {
@@ -153,7 +156,7 @@ func writeDefaultTestHash() (string, error) {
 		if err = w.Put([]byte("yk"), []byte("longvalue")); err != nil {
 			return
 		}
-		if err = w.Put([]byte("zk"), []byte("last")); err != nil {
+		if err = w.Put([]byte("zk"), []byte(veryLongString)); err != nil {
 			return
 		}
 		if err = w.Delete([]byte("yk")); err != nil {

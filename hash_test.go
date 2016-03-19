@@ -82,7 +82,7 @@ var _ = Describe("HashReader", func() {
 		// Get existing
 		val, err = subject.Get([]byte("zk"))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(val)).To(Equal("last"))
+		Expect(string(val)).To(Equal(veryLongString))
 
 		val, err = subject.Get([]byte("xk"))
 		Expect(err).NotTo(HaveOccurred())
