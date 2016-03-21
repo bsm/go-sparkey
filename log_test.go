@@ -80,7 +80,7 @@ var _ = Describe("LogReader", func() {
 		Expect(subject.log).NotTo(BeNil())
 		Expect(subject.Name()).To(ContainSubstring("test.spl"))
 		Expect(subject.MaxKeyLen()).To(Equal(uint64(2)))
-		Expect(subject.MaxValueLen()).To(Equal(uint64(9)))
+		Expect(subject.MaxValueLen()).To(Equal(uint64(len(veryLongString))))
 		Expect(subject.Compression()).To(Equal(COMPRESSION_NONE))
 		Expect(subject.CompressionBlockSize()).To(Equal(0))
 		Expect(subject.Close()).NotTo(HaveOccurred())

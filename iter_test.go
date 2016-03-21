@@ -1,6 +1,9 @@
 package sparkey
 
 import (
+	"bytes"
+	"io"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -42,7 +45,10 @@ var _ = Describe("LogIter", func() {
 	It("should retrieve keys", func() {
 		_, err := subject.Key()
 		Expect(err).To(Equal(ERROR_LOG_ITERATOR_INACTIVE))
+
 		Expect(subject.Next()).NotTo(HaveOccurred())
+		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
+		Expect(subject.Valid()).To(Equal(true))
 
 		key, err := subject.Key()
 		Expect(err).NotTo(HaveOccurred())
@@ -54,19 +60,81 @@ var _ = Describe("LogIter", func() {
 
 		Expect(subject.Next()).NotTo(HaveOccurred())
 
-		key, err = subject.KeyChunk(0)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(key)).To(Equal(""))
-
-		key, err = subject.KeyChunk(5)
+		key, err = subject.Key()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(key)).To(Equal("yk"))
+	})
+
+	It("should retrieve keys using the io.Reader interface", func() {
+		b := make([]byte, 5)
+		r := subject.KeyReader()
+		n, err := r.Read(b)
+		Expect(n).To(Equal(0))
+		Expect(err).To(Equal(ERROR_LOG_ITERATOR_INACTIVE))
+
+		Expect(subject.Next()).NotTo(HaveOccurred())
+		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
+		Expect(subject.Valid()).To(Equal(true))
+
+		b = make([]byte, 2)
+		n, err = r.Read(b)
+		Expect(n).To(Equal(2))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:2])).To(Equal("xk"))
+
+		b = make([]byte, 5)
+		n, err = r.Read(b)
+		Expect(n).To(Equal(0))
+		Expect(err).To(Equal(io.EOF))
+
+		Expect(subject.Next()).NotTo(HaveOccurred())
+
+		b = []byte{}
+		n, err = r.Read(b)
+		Expect(n).To(Equal(0))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b)).To(Equal(""))
+
+		b = make([]byte, 5)
+		n, err = r.Read(b)
+		Expect(n).To(Equal(2))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:2])).To(Equal("yk"))
+	})
+
+	It("should retrieve keys using the io.WriterTo interface", func() {
+		buf := new(bytes.Buffer)
+		wt := subject.KeyReader()
+
+		buf.Reset()
+		n, err := wt.WriteTo(buf)
+		Expect(n).To(Equal(int64(0)))
+		Expect(err).To(Equal(ERROR_LOG_ITERATOR_INACTIVE))
+
+		Expect(subject.Next()).NotTo(HaveOccurred())
+		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
+		Expect(subject.Valid()).To(Equal(true))
+
+		buf.Reset()
+		n, err = wt.WriteTo(buf)
+		Expect(n).To(Equal(int64(2)))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(buf.String()).To(Equal("xk"))
+
+		buf.Reset()
+		n, err = wt.WriteTo(buf)
+		Expect(n).To(Equal(int64(0)))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(buf.String()).To(Equal(""))
 	})
 
 	It("should retrieve values", func() {
 		_, err := subject.Value()
 		Expect(err).To(Equal(ERROR_LOG_ITERATOR_INACTIVE))
+
 		Expect(subject.Next()).NotTo(HaveOccurred())
+		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
+		Expect(subject.Valid()).To(Equal(true))
 
 		val, err := subject.Value()
 		Expect(err).NotTo(HaveOccurred())
@@ -78,17 +146,86 @@ var _ = Describe("LogIter", func() {
 
 		Expect(subject.Next()).NotTo(HaveOccurred())
 
-		val, err = subject.ValueChunk(0)
+		val, err = subject.Value()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(val)).To(Equal(""))
+		Expect(string(val)).To(Equal("longvalue"))
 
-		val, err = subject.ValueChunk(5)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(val)).To(Equal("longv"))
+		Expect(subject.Next()).NotTo(HaveOccurred())
 
 		val, err = subject.Value()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(val)).To(Equal("alue"))
+		Expect(string(val)).To(Equal(veryLongString))
+	})
+
+	It("should retrieve values using the io.Reader interface", func() {
+		b := make([]byte, 5)
+		r := subject.ValueReader()
+		n, err := r.Read(b)
+		Expect(n).To(Equal(0))
+		Expect(err).To(Equal(ERROR_LOG_ITERATOR_INACTIVE))
+
+		Expect(subject.Next()).NotTo(HaveOccurred())
+		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
+		Expect(subject.Valid()).To(Equal(true))
+
+		b = make([]byte, 5)
+		n, err = r.Read(b)
+		Expect(n).To(Equal(5))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b)).To(Equal("short"))
+
+		b = make([]byte, 5)
+		n, err = r.Read(b)
+		Expect(n).To(Equal(0))
+		Expect(err).To(Equal(io.EOF))
+
+		Expect(subject.Next()).NotTo(HaveOccurred())
+
+		b = []byte{}
+		n, err = r.Read(b)
+		Expect(n).To(Equal(0))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b)).To(Equal(""))
+
+		b = make([]byte, 5)
+		n, err = r.Read(b)
+		Expect(n).To(Equal(5))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b)).To(Equal("longv"))
+
+		Expect(subject.Next()).NotTo(HaveOccurred())
+
+		b = make([]byte, len(veryLongString))
+		n, err = io.ReadFull(r, b)
+		Expect(n).To(Equal(len(veryLongString)))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b)).To(Equal(veryLongString))
+	})
+
+	It("should retrieve values using the io.WriterTo interface", func() {
+		buf := new(bytes.Buffer)
+		wt := subject.ValueReader()
+
+		buf.Reset()
+		n, err := wt.WriteTo(buf)
+		Expect(n).To(Equal(int64(0)))
+		Expect(err).To(Equal(ERROR_LOG_ITERATOR_INACTIVE))
+
+		Expect(subject.Next()).NotTo(HaveOccurred())
+		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
+		Expect(subject.Valid()).To(Equal(true))
+
+		buf.Reset()
+		n, err = wt.WriteTo(buf)
+		Expect(n).To(Equal(int64(5)))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(buf.String()).To(Equal("short"))
+
+		buf.Reset()
+		n, err = wt.WriteTo(buf)
+		Expect(n).To(Equal(int64(0)))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(buf.String()).To(Equal(""))
 	})
 
 	It("should navigate", func() {
@@ -137,7 +274,7 @@ var _ = Describe("LogIter", func() {
 			contents = append(contents, kv())
 		}
 		Expect(contents).To(Equal([]string{
-			"xk:short", "yk:longvalue", "zk:last", "yk:",
+			"xk:short", "yk:longvalue", "zk:" + veryLongString, "yk:",
 		}))
 		Expect(subject.Err()).NotTo(HaveOccurred())
 	})
@@ -167,7 +304,6 @@ var _ = Describe("LogIter", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(val).To(Equal(1))
 	})
-
 })
 
 var _ = Describe("HashIter", func() {
@@ -199,7 +335,7 @@ var _ = Describe("HashIter", func() {
 			contents = append(contents, kv())
 		}
 		Expect(contents).To(Equal([]string{
-			"xk:short", "zk:last",
+			"xk:short", "zk:" + veryLongString,
 		}))
 		Expect(subject.Err()).NotTo(HaveOccurred())
 	})
@@ -214,7 +350,7 @@ var _ = Describe("HashIter", func() {
 		err = subject.Seek([]byte("zk"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
-		Expect(kv()).To(Equal(":last"))
+		Expect(kv()).To(Equal(":" + veryLongString))
 		err = subject.Seek([]byte("xk"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(subject.State()).To(Equal(ITERATOR_ACTIVE))
@@ -235,7 +371,7 @@ var _ = Describe("HashIter", func() {
 		// Get existing
 		val, err = subject.Get([]byte("zk"))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(val)).To(Equal("last"))
+		Expect(string(val)).To(Equal(veryLongString))
 
 		val, err = subject.Get([]byte("xk"))
 		Expect(err).NotTo(HaveOccurred())
